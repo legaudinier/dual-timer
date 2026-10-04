@@ -50,6 +50,7 @@
       display: block;
       margin-left: auto;
       margin-bottom: 20px;
+      font-size: 40px;
     }
 
     .timers {
@@ -110,6 +111,13 @@
       background: var(--hover);
     }
 
+    #sessionSection,
+    #sessionInfo {
+      font-size: 40px;
+      margin-top: 30px;
+      margin-bottom: 30px;
+    }
+
     button:disabled {
       opacity: .45;
       cursor: not-allowed;
@@ -138,6 +146,7 @@
       width: 100%;
       height: 100px;
       margin-bottom: 30px;
+      font-size: 40px;
     }
 
     table {
@@ -247,7 +256,7 @@
   </div>
 
   <div class="bar">
-    <div>
+    <div id="sessionSection">
       <strong>Session:</strong>
       <span id="sessionInfo" class="muted">not started</span>
     </div>
