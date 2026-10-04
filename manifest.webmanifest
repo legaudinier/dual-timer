@@ -1,6 +1,6 @@
 {
-  "name": "L/R Timer",
-  "short_name": "L/R Timer",
+  "name": "Dual Timer",
+  "short_name": "Dual Timer",
   "description": "Track left and right timed sessions and export them to CSV.",
   "start_url": "./index.html",
   "scope": "./",
