@@ -9,19 +9,6 @@
   <link rel="apple-touch-icon" href="icon-192.png" />
   <style>
     :root {
-      --bg: #f5f6f8;
-      --fg: #1f2328;
-      --surface: #fff;
-      --surface-alt: #eceff3;
-      --border: #d5d9e0;
-      --hover: #eef1f5;
-      --muted: #6b7280;
-      --active-border: #2e9e4f;
-      --active-bg: #eaf7ee;
-      --shimmer: rgba(46, 158, 79, .45);
-    }
-
-    [data-theme="dark"] {
       --bg: #241c3a;
       --fg: #ece8f7;
       --surface: #2f2550;
@@ -32,6 +19,19 @@
       --active-border: #a78bfa;
       --active-bg: #3d2f6b;
       --shimmer: rgba(167, 139, 250, .55);
+    }
+
+    [data-theme="dark"] {
+      --bg: #f5f6f8;
+      --fg: #1f2328;
+      --surface: #fff;
+      --surface-alt: #eceff3;
+      --border: #d5d9e0;
+      --hover: #eef1f5;
+      --muted: #6b7280;
+      --active-border: #2e9e4f;
+      --active-bg: #eaf7ee;
+      --shimmer: rgba(46, 158, 79, .45);
     }
 
     body {
@@ -130,6 +130,13 @@
       gap: 8px;
       align-items: center;
       flex-wrap: wrap;
+    }
+
+    #saveBtn,
+    #resetBtn,
+    #exportCsvBtn {
+      width: 100%;
+      height: 100px;
     }
 
     table {
@@ -239,11 +246,13 @@
   </div>
 
   <div class="bar">
-    <strong>Session:</strong>
-    <span id="sessionInfo" class="muted">not started</span>
+    <div>
+      <strong>Session:</strong>
+      <span id="sessionInfo" class="muted">not started</span>
+    </div>
     <button id="saveBtn">Save Session</button>
     <button id="resetBtn">Reset Current</button>
-    <button id="exportBtn" style="display:none">Export JSON</button>
+    <!-- <button id="exportBtn">Export JSON</button> -->
     <button id="exportCsvBtn">Export CSV</button>
   </div>
 
@@ -279,8 +288,8 @@
           id: 'u1',
           name: 'User 1',
           sessions: [
-            [ "u1", "User 1", "s_1791125974715_z99sne", "2026-10-04", "2026-10-04T14:59:34.716Z", "2026 - 10-04T15:06: 42.838Z", 208198, 160129, 368327, 428122, "2026 - 10-04T15:06: 48.118Z" ],
-            [ "u1", "User 1", "s_1791145337294_0uz80j", "2026-10-04", "2026-10-04T20:22:17.294Z", "2026 - 10-04T20: 34: 58.364Z", 327123, 384177, 711300, 761070, "2026 - 10-04T20: 35:06.126Z" ]
+            ["u1", "User 1", "s_1791125974715_z99sne", "2026-10-04", "2026-10-04T14:59:34.716Z", "2026 - 10-04T15:06: 42.838Z", 208198, 160129, 368327, 428122, "2026 - 10-04T15:06: 48.118Z"],
+            ["u1", "User 1", "s_1791145337294_0uz80j", "2026-10-04", "2026-10-04T20:22:17.294Z", "2026 - 10-04T20: 34: 58.364Z", 327123, 384177, 711300, 761070, "2026 - 10-04T20: 35:06.126Z"]
           ]
         },
         { id: 'u2', name: 'User 2', sessions: [] }
@@ -655,4 +664,5 @@
     })();
   </script>
 </body>
+
 </html>
