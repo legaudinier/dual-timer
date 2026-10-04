@@ -82,7 +82,6 @@
       color: transparent;
     }
 
-
     .clock {
       font-size: 42px;
       font-variant-numeric: tabular-nums;
@@ -241,7 +240,7 @@
   </div>
 
   <h2 id="sessionsToggle" class="collapser">
-    <span id="caret">&#9660;</span>
+    <span id="caret">▼</span>
     Saved Sessions <span id="userLabel" style="display:none"></span>(<span id="count">0</span>)
   </h2>
   <table id="tbl">
@@ -263,27 +262,23 @@
 
   <script>
     /* ============================================================
-       DATA - the stored sessions live here, in the code.
-       Use "Copy Data Snippet" in the app and paste the result
-       over this block to bake new sessions into the file.
+       DATA - Stored sessions live here.
        ============================================================ */
-  var DATA = {
-  activeUserId: 'u1',
-  users: [
-    {
-      id: 'u1',
-      name: 'User 1',
-      sessions: []
-    },
-    {
-      id: 'u2',
-      name: 'User 2',
-      sessions: []
-    }
-  ]
-};
+    var DATA = {
+      activeUserId: 'u1',
+      users: [
+        {
+          id: 'u1',
+          name: 'User 1',
+          sessions: [
+            [ "u1", "User 1", "s_1791125974715_z99sne", "2026-10-04", "2026-10-04T14:59:34.716Z", "2026 - 10-04T15:06: 42.838Z", 208198, 160129, 368327, 428122, "2026 - 10-04T15:06: 48.118Z" ],
+            [ "u1", "User 1", "s_1791145337294_0uz80j", "2026-10-04", "2026-10-04T20:22:17.294Z", "2026 - 10-04T20: 34: 58.364Z", 327123, 384177, 711300, 761070, "2026 - 10-04T20: 35:06.126Z" ]
+          ]
+        },
+        { id: 'u2', name: 'User 2', sessions: [] }
+      ]
+    };
 
-    
     (function () {
       'use strict';
 
@@ -291,8 +286,40 @@
       var store = { users: JSON.parse(JSON.stringify(DATA.users)) };
       var activeUserId = DATA.activeUserId;
 
+      // Normalizer: Handles both legacy 11-element arrays and structured session objects
+      function normalizeSession(s) {
+        if (Array.isArray(s)) {
+          return {
+            id: s[2],
+            date: s[3],
+            started: s[4] ? String(s[4]).replace(/\s+/g, '') : '',
+            ended: s[5] ? String(s[5]).replace(/\s+/g, '') : '',
+            left: Number(s[6]) || 0,
+            right: Number(s[7]) || 0,
+            combined: Number(s[8]) || 0,
+            total: Number(s[9]) || 0,
+            savedAt: s[10] ? String(s[10]).replace(/\s+/g, '') : ''
+          };
+        }
+        return {
+          id: s.id || ('s_' + Date.now()),
+          date: s.date || '',
+          started: (s.started || s.start || '').replace(/\s+/g, ''),
+          ended: (s.ended || s.end || '').replace(/\s+/g, ''),
+          left: Number(s.left) || 0,
+          right: Number(s.right) || 0,
+          combined: Number(s.combined) || ((Number(s.left) || 0) + (Number(s.right) || 0)),
+          total: Number(s.total) || 0,
+          savedAt: (s.savedAt || '').replace(/\s+/g, '')
+        };
+      }
+
       function user() {
-        return store.users.find(function (u) { return u.id === activeUserId; });
+        var found = store.users.find(function (u) { return u.id === activeUserId; });
+        if (found && found.sessions) {
+          found.sessions = found.sessions.map(normalizeSession);
+        }
+        return found;
       }
 
       function snapshot() {
@@ -310,23 +337,27 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(DATA)
-        }).catch(function () { /* no server: localStorage only */ });
+        }).catch(function () { /* localStorage only fallback */ });
       }
-
-      // call copyDataSnippet() from the console to bake current data into the DATA block
-      function dataSnippet() {
-        return 'var DATA = ' + JSON.stringify(snapshot(), null, 2) + ';';
-      }
-
-      window.copyDataSnippet = function () {
-        var text = dataSnippet();
-        if (navigator.clipboard) navigator.clipboard.writeText(text);
-        return text;
-      };
 
       function apply(data) {
         if (!data || !Array.isArray(data.users) || !data.users.length) return false;
-        store.users = data.users;
+
+        data.users.forEach(function (incomingUser) {
+          var targetUser = store.users.find(function (u) { return u.id === incomingUser.id; });
+          if (!targetUser) {
+            store.users.push(incomingUser);
+            targetUser = incomingUser;
+          }
+          var combinedSessions = (targetUser.sessions || []).concat(incomingUser.sessions || []);
+          var uniqueMap = {};
+          combinedSessions.forEach(function (s) {
+            var clean = normalizeSession(s);
+            if (clean && clean.id) uniqueMap[clean.id] = clean;
+          });
+          targetUser.sessions = Object.values(uniqueMap);
+        });
+
         activeUserId = data.users.some(function (u) { return u.id === data.activeUserId; })
           ? data.activeUserId : data.users[0].id;
         return true;
@@ -341,408 +372,279 @@
         }
       }
 
-      // data.json is the source of truth when the server is running
-      function load() {
-        loadLocal();
-        render();
-        renderTable();
-        fetch('/data')
-          .then(function (r) { return r.json(); })
-          .then(function (data) {
-            if (apply(data)) { render(); renderTable(); }
-          })
-          .catch(function () { /* no server: localStorage only */ });
+      // Time and Date formatting
+      function formatTime(ms) {
+        if (!ms && ms !== 0) return '00:00:00.0';
+        var secs = Math.floor(ms / 1000);
+        var hrs = Math.floor(secs / 3600);
+        var mins = Math.floor((secs % 3600) / 60);
+        var remSecs = secs % 60;
+        var tenths = Math.floor((ms % 1000) / 100);
+        return [
+          hrs.toString().padStart(2, '0'),
+          mins.toString().padStart(2, '0'),
+          remSecs.toString().padStart(2, '0')
+        ].join(':') + '.' + tenths;
       }
 
-      // exempts this origin from automatic storage eviction where supported
-      if (navigator.storage && navigator.storage.persist) {
-        navigator.storage.persisted().then(function (already) {
-          if (!already) navigator.storage.persist();
-        });
+      function formatDate(d) {
+        return d.getFullYear() + '-' +
+          String(d.getMonth() + 1).padStart(2, '0') + '-' +
+          String(d.getDate()).padStart(2, '0');
       }
 
-      function commit() {
-        persist();
-        render();
-        renderTable();
+      /* ============================================================
+         TIMER STATE & DUAL ENGINE
+         ============================================================ */
+      var timerState = {
+        activeTimer: null, // 'left', 'right', or null
+        sessionStartTime: null,
+        leftMs: 0,
+        rightMs: 0,
+        lastTick: null,
+        timerInterval: null
+      };
+
+      var leftBox = document.getElementById('leftBox');
+      var rightBox = document.getElementById('rightBox');
+      var leftClock = document.getElementById('leftClock');
+      var rightClock = document.getElementById('rightClock');
+      var sessionInfo = document.getElementById('sessionInfo');
+
+      function updateClockDisplays() {
+        leftClock.textContent = formatTime(timerState.leftMs);
+        rightClock.textContent = formatTime(timerState.rightMs);
       }
 
-      // ---- current session state ----
-      var current = null;
-      var active = null;      // 'left' | 'right' | null
-      var activeStart = 0;    // ms epoch
+      function tick() {
+        var now = performance.now();
+        var delta = now - timerState.lastTick;
+        timerState.lastTick = now;
 
-      function newSession() {
-        return {
-          id: 's_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
-          utcDate: null,
-          startedAt: null,
-          endedAt: null,
-          left: { totalMs: 0, runs: [] },
-          right: { totalMs: 0, runs: [] }
-        };
-      }
-
-      function fmt(ms) {
-        if (ms < 0) ms = 0;
-        var t = Math.floor(ms / 100);
-        var tenths = t % 10;
-        var s = Math.floor(t / 10);
-        var hh = String(Math.floor(s / 3600)).padStart(2, '0');
-        var mm = String(Math.floor(s / 60) % 60).padStart(2, '0');
-        var ss = String(s % 60).padStart(2, '0');
-        return hh + ':' + mm + ':' + ss + '.' + tenths;
-      }
-
-      function elapsed(side) {
-        var base = current ? current[side].totalMs : 0;
-        if (active === side) base += Date.now() - activeStart;
-        return base;
-      }
-
-      function stopActive() {
-        if (!active) return;
-        var now = Date.now();
-        var dur = now - activeStart;
-        current[active].totalMs += dur;
-        current[active].runs.push({
-          startedAt: new Date(activeStart).toISOString(),
-          endedAt: new Date(now).toISOString(),
-          durationMs: dur
-        });
-        current.endedAt = new Date(now).toISOString();
-        active = null;
-      }
-
-      function start(side) {
-        if (!current) {
-          current = newSession();
-          current.startedAt = new Date().toISOString();
-          current.utcDate = current.startedAt.slice(0, 10);
+        if (timerState.activeTimer === 'left') {
+          timerState.leftMs += delta;
+        } else if (timerState.activeTimer === 'right') {
+          timerState.rightMs += delta;
         }
-        stopActive();             // mutual exclusion: stop the other one
-        active = side;
-        activeStart = Date.now();
+
+        updateClockDisplays();
       }
 
-      function toggle(side) {
-        if (active === side) stopActive(); else start(side);
-        render();
+      function toggleTimer(side) {
+        var now = performance.now();
+
+        if (!timerState.sessionStartTime) {
+          timerState.sessionStartTime = new Date();
+          sessionInfo.textContent = 'Running (Started ' + timerState.sessionStartTime.toLocaleTimeString() + ')';
+        }
+
+        if (timerState.activeTimer === side) {
+          // Pause when clicking currently running timer
+          timerState.activeTimer = null;
+          clearInterval(timerState.timerInterval);
+          timerState.timerInterval = null;
+          leftBox.classList.remove('active');
+          rightBox.classList.remove('active');
+        } else {
+          // Switch or Start selected timer
+          timerState.activeTimer = side;
+          timerState.lastTick = now;
+          if (!timerState.timerInterval) {
+            timerState.timerInterval = setInterval(tick, 50);
+          }
+          leftBox.classList.toggle('active', side === 'left');
+          rightBox.classList.toggle('active', side === 'right');
+        }
       }
 
-      // ---- rendering ----
-      var $ = function (id) { return document.getElementById(id); };
+      document.getElementById('leftBtn').addEventListener('click', function () {
+        toggleTimer('left');
+      });
+
+      document.getElementById('rightBtn').addEventListener('click', function () {
+        toggleTimer('right');
+      });
+
+      function resetCurrentSession() {
+        if (timerState.timerInterval) {
+          clearInterval(timerState.timerInterval);
+          timerState.timerInterval = null;
+        }
+        timerState.activeTimer = null;
+        timerState.sessionStartTime = null;
+        timerState.leftMs = 0;
+        timerState.rightMs = 0;
+        timerState.lastTick = null;
+        leftBox.classList.remove('active');
+        rightBox.classList.remove('active');
+        updateClockDisplays();
+        sessionInfo.textContent = 'not started';
+      }
+
+      document.getElementById('resetBtn').addEventListener('click', resetCurrentSession);
+
+      document.getElementById('saveBtn').addEventListener('click', function () {
+        if (!timerState.sessionStartTime && timerState.leftMs === 0 && timerState.rightMs === 0) {
+          alert('No recorded session to save.');
+          return;
+        }
+
+        var endedAt = new Date();
+        var startedAt = timerState.sessionStartTime || endedAt;
+        var currentUser = user();
+
+        var newSession = {
+          id: 's_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8),
+          date: formatDate(startedAt),
+          started: startedAt.toISOString(),
+          ended: endedAt.toISOString(),
+          left: Math.round(timerState.leftMs),
+          right: Math.round(timerState.rightMs),
+          combined: Math.round(timerState.leftMs + timerState.rightMs),
+          total: Math.round(endedAt - startedAt),
+          savedAt: new Date().toISOString()
+        };
+
+        currentUser.sessions.unshift(newSession);
+        persist();
+        renderTable();
+        resetCurrentSession();
+      });
+
+      /* ============================================================
+         RENDERING & TABLE CONTROLS
+         ============================================================ */
+      function renderTable() {
+        var currentUser = user();
+        var tbody = document.querySelector('#tbl tbody');
+        var countSpan = document.getElementById('count');
+        if (!tbody) return;
+
+        tbody.innerHTML = '';
+        if (!currentUser || !currentUser.sessions || !currentUser.sessions.length) {
+          countSpan.textContent = '0';
+          return;
+        }
+
+        var sorted = currentUser.sessions.slice().sort(function (a, b) {
+          return new Date(b.started) - new Date(a.started);
+        });
+
+        countSpan.textContent = sorted.length;
+
+        sorted.forEach(function (s, index) {
+          var tr = document.createElement('tr');
+          var startDate = new Date(s.started);
+          var endDate = new Date(s.ended);
+
+          var gapText = '-';
+          if (index < sorted.length - 1) {
+            var prevSession = sorted[index + 1];
+            var gapMs = new Date(s.started) - new Date(prevSession.ended);
+            if (gapMs > 0) gapText = formatTime(gapMs);
+          }
+
+          tr.innerHTML = [
+            '<td>' + (isNaN(startDate.getTime()) ? '-' : startDate.toLocaleString()) + '</td>',
+            '<td>' + (isNaN(endDate.getTime()) ? '-' : endDate.toLocaleString()) + '</td>',
+            '<td>' + s.started + '</td>',
+            '<td>' + s.ended + '</td>',
+            '<td>' + formatTime(s.left) + '</td>',
+            '<td>' + formatTime(s.right) + '</td>',
+            '<td>' + formatTime(s.combined) + '</td>',
+            '<td>' + gapText + '</td>',
+            '<td><button class="del-btn" data-id="' + s.id + '">Delete</button></td>'
+          ].join('');
+
+          tbody.appendChild(tr);
+        });
+      }
 
       function render() {
-        $('leftClock').textContent = fmt(elapsed('left'));
-        $('rightClock').textContent = fmt(elapsed('right'));
-        $('leftBtn').textContent = active === 'left' ? 'Stop' : 'Start';
-        $('rightBtn').textContent = active === 'right' ? 'Stop' : 'Start';
-        $('leftBox').className = 'timer' + (active === 'left' ? ' active' : '');
-        $('rightBox').className = 'timer' + (active === 'right' ? ' active' : '');
-
-        if (!current) {
-          $('sessionInfo').textContent = 'not started';
-        } else {
-          $('sessionInfo').textContent =
-            'started ' + localTime(current.startedAt) +
-            ' | combined ' + fmt(elapsed('left') + elapsed('right'));
+        var currentUser = user();
+        if (currentUser) {
+          document.getElementById('userLabel').textContent = currentUser.name;
         }
-        $('saveBtn').disabled = !current;
-        $('resetBtn').disabled = !current;
-        $('exportBtn').disabled = user().sessions.length === 0;
-        $('exportCsvBtn').disabled = user().sessions.length === 0;
-        $('exportCsvBtn').className = exportOverdue() ? 'shimmer' : '';
-        $('exportCsvBtn').title = exportOverdue() ? 'No export yet today - time to back up' : '';
-        $('delUserBtn').disabled = store.users.length <= 1;
-        $('userLabel').textContent = user().name;
       }
 
-      function renderUsers() {
-        var sel = $('userSel');
-        sel.textContent = '';
-        store.users.forEach(function (u) {
-          var o = document.createElement('option');
-          o.value = u.id;
-          o.textContent = u.name + ' (' + u.sessions.length + ')';
-          sel.appendChild(o);
+      window.copyDataSnippet = function () {
+        var text = 'var DATA = ' + JSON.stringify(snapshot(), null, 2) + ';';
+        if (navigator.clipboard) navigator.clipboard.writeText(text);
+        return text;
+      };
+
+      // Export CSV functionality
+      document.getElementById('exportCsvBtn').addEventListener('click', function () {
+        var currentUser = user();
+        if (!currentUser || !currentUser.sessions || !currentUser.sessions.length) {
+          alert('No sessions to export.');
+          return;
+        }
+        var headers = ['ID', 'Date', 'Started', 'Ended', 'Left (ms)', 'Right (ms)', 'Combined (ms)', 'Total (ms)', 'Saved At'];
+        var rows = currentUser.sessions.map(function (s) {
+          return [
+            '"' + s.id + '"',
+            '"' + s.date + '"',
+            '"' + s.started + '"',
+            '"' + s.ended + '"',
+            s.left,
+            s.right,
+            s.combined,
+            s.total,
+            '"' + s.savedAt + '"'
+          ].join(',');
         });
-        sel.value = activeUserId;
-      }
+        var csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(',')].concat(rows).join('\n');
+        var encodedUri = encodeURI(csvContent);
+        var link = document.createElement('a');
+        link.setAttribute('href', encodedUri);
+        link.setAttribute('download', 'sessions_' + currentUser.id + '.csv');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      });
 
-      function fmtGap(ms) {
-        if (ms == null) return '-';
-        if (ms < 0) ms = 0;
-        var s = Math.round(ms / 1000);
-        if (s < 60) return s + 's';
-        var m = Math.floor(s / 60);
-        if (m < 60) return m + 'm ' + (s % 60) + 's';
-        var h = Math.floor(m / 60);
-        if (h < 24) return h + 'h ' + (m % 60) + 'm';
-        return Math.floor(h / 24) + 'd ' + (h % 24) + 'h';
-      }
-
-      function timeOfDay(iso) {
-        return iso ? iso.slice(11, 19) : '';
-      }
-
-      function localTime(iso) {
-        return iso ? new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
-      }
-
-      var EXPORT_KEY = 'dualTimer.lastExportDay';
-      var REMIND_HOUR = 20;
-
-      function localDay(d) {
-        d = d || new Date();
-        var p = function (n) { return String(n).padStart(2, '0'); };
-        return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
-      }
-
-      function lastExportDay() {
-        try { return localStorage.getItem(EXPORT_KEY); } catch (e) { return null; }
-      }
-
-      function markExported() {
-        try { localStorage.setItem(EXPORT_KEY, localDay()); } catch (e) { /* ignore */ }
-      }
-
-      // set window.forceShimmer = true in the console to preview the reminder
-      function exportOverdue() {
-        if (window.forceShimmer) return true;
-        return new Date().getHours() >= REMIND_HOUR &&
-          user().sessions.length > 0 &&
-          lastExportDay() !== localDay();
-      }
-
-      function renderTable() {
-        var tb = $('tbl').querySelector('tbody');
-        tb.textContent = '';
-
-        var sorted = user().sessions.slice().sort(function (a, b) {
-          return new Date(a.startedAt) - new Date(b.startedAt);
-        });
-        var gaps = sorted.map(function (s, i) {
-          return i === 0 ? null : new Date(s.startedAt) - new Date(sorted[i - 1].endedAt);
-        });
-
-        var days = [];
-        sorted.forEach(function (s, i) {
-          var day = days[days.length - 1];
-          if (!day || day.date !== s.utcDate) {
-            day = { date: s.utcDate, rows: [] };
-            days.push(day);
-          }
-          day.rows.push({ s: s, gap: gaps[i] });
-        });
-        days.reverse();
-
-        days.forEach(function (day) {
-          var total = day.rows.reduce(function (n, r) { return n + r.s.combinedMs; }, 0);
-          var head = document.createElement('tr');
-          head.className = 'daygroup';
-          var hc = document.createElement('td');
-          hc.colSpan = 9;
-          hc.textContent = day.date + ' - ' + day.rows.length + ' session(s), ' +
-            fmt(total) + ' combined';
-          head.appendChild(hc);
-          tb.appendChild(head);
-
-          day.rows.slice().reverse().forEach(function (r) {
-            var s = r.s;
-            var tr = document.createElement('tr');
-            [localTime(s.startedAt), localTime(s.endedAt),
-            timeOfDay(s.startedAt), timeOfDay(s.endedAt), fmt(s.left.totalMs),
-            fmt(s.right.totalMs), fmt(s.combinedMs), fmtGap(r.gap)
-            ].forEach(function (v) {
-              var td = document.createElement('td');
-              td.textContent = v == null ? '' : String(v);
-              tr.appendChild(td);
+      // Table Row Delete Handler
+      document.querySelector('#tbl tbody').addEventListener('click', function (e) {
+        if (e.target.classList.contains('del-btn')) {
+          var targetId = e.target.getAttribute('data-id');
+          var currentUser = user();
+          if (currentUser && currentUser.sessions) {
+            currentUser.sessions = currentUser.sessions.filter(function (s) {
+              return s.id !== targetId;
             });
-            var td = document.createElement('td');
-            var b = document.createElement('button');
-            b.textContent = 'Delete';
-            b.addEventListener('click', function () { deleteSession(s.id); });
-            td.appendChild(b);
-            tr.appendChild(td);
-            tb.appendChild(tr);
-          });
-        });
-
-        $('count').textContent = user().sessions.length;
-        renderUsers();
-      }
-
-      // ---- actions ----
-      function saveSession() {
-        if (!current) return;
-        stopActive();
-        var rec = JSON.parse(JSON.stringify(current));
-        rec.combinedMs = rec.left.totalMs + rec.right.totalMs;
-        rec.wallClockMs = rec.endedAt
-          ? new Date(rec.endedAt) - new Date(rec.startedAt)
-          : 0;
-        rec.savedAt = new Date().toISOString();
-        rec.userId = activeUserId;
-        rec.userName = user().name;
-        user().sessions.push(rec);
-        current = null;
-        commit();
-      }
-
-      function deleteSession(id) {
-        var list = user().sessions;
-        var s = list.find(function (x) { return x.id === id; });
-        if (!s) return;
-        if (!window.confirm('Delete session from ' + s.startedAt + ' for ' + user().name + '?\nThis cannot be undone.')) return;
-        user().sessions = list.filter(function (x) { return x.id !== id; });
-        commit();
-      }
-
-      // ---- user actions ----
-      function unsavedBlocks() {
-        return !!current &&
-          !window.confirm('The current session is unsaved and will be discarded. Continue?');
-      }
-
-      function switchUser(id) {
-        if (id === activeUserId) return;
-        if (unsavedBlocks()) { $('userSel').value = activeUserId; return; }
-        active = null;
-        current = null;
-        activeUserId = id;
-        commit();
-      }
-
-      function addUser() {
-        var name = window.prompt('New user name:', 'User ' + (store.users.length + 1));
-        if (!name) return;
-        name = name.trim();
-        if (!name) return;
-        if (unsavedBlocks()) return;
-        var u = { id: 'u_' + Date.now().toString(36), name: name, sessions: [] };
-        store.users.push(u);
-        active = null;
-        current = null;
-        activeUserId = u.id;
-        commit();
-      }
-
-      function renameUser() {
-        var name = window.prompt('Rename user:', user().name);
-        if (!name || !name.trim()) return;
-        user().name = name.trim();
-        commit();
-      }
-
-      function deleteUser() {
-        if (store.users.length <= 1) return;
-        var u = user();
-        if (!window.confirm('Delete user "' + u.name + '" and all ' + u.sessions.length +
-          ' saved session(s)?\nThis cannot be undone.')) return;
-        store.users = store.users.filter(function (x) { return x.id !== u.id; });
-        activeUserId = store.users[0].id;
-        active = null;
-        current = null;
-        commit();
-      }
-
-      function resetCurrent() {
-        if (!current) return;
-        if (!window.confirm('Discard the current unsaved session?')) return;
-        active = null;
-        current = null;
-        render();
-      }
-
-      function download(name, text, type) {
-        var blob = new Blob([text], { type: type });
-        var url = URL.createObjectURL(blob);
-        var a = document.createElement('a');
-        a.href = url;
-        a.download = name;
-        a.click();
-        URL.revokeObjectURL(url);
-      }
-
-      function slug(s) {
-        return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'user';
-      }
-
-      function fileName(ext) {
-        var d = new Date();
-        var p = function (n) { return String(n).padStart(2, '0'); };
-        var date = d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
-        var time = p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
-        return 'timer_' + date + '-' + time + '.' + ext;
-      }
-
-      function exportJson() {
-        var u = user();
-        download(fileName('json'), JSON.stringify({
-          userId: u.id, userName: u.name, exportedAt: new Date().toISOString(), sessions: u.sessions
-        }, null, 2), 'application/json');
-      }
-
-      function csvCell(v) {
-        return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-      }
-
-      var CSV_HEAD = ['userId', 'userName', 'sessionId', 'utcDate', 'startedAt', 'endedAt',
-        'leftMs', 'rightMs', 'combinedMs', 'wallClockMs', 'savedAt'];
-
-      function csvRows(users) {
-        var rows = [];
-        users.forEach(function (u) {
-          u.sessions.forEach(function (s) {
-            rows.push([u.id, u.name, s.id, s.utcDate, s.startedAt, s.endedAt, s.left.totalMs,
-            s.right.totalMs, s.combinedMs, s.wallClockMs, s.savedAt].map(csvCell).join(','));
-          });
-        });
-        return rows;
-      }
-
-      function csvText(users) {
-        return [CSV_HEAD.join(',')].concat(csvRows(users)).join('\n') + '\n';
-      }
-
-      function exportCsv() {
-        download(fileName('csv'), csvText([user()]), 'text/csv');
-        markExported();
-        render();
-      }
-
-      $('leftBtn').addEventListener('click', function () { toggle('left'); });
-      $('rightBtn').addEventListener('click', function () { toggle('right'); });
-      $('saveBtn').addEventListener('click', saveSession);
-      $('resetBtn').addEventListener('click', resetCurrent);
-      $('exportBtn').addEventListener('click', exportJson);
-      $('exportCsvBtn').addEventListener('click', exportCsv);
-      $('userSel').addEventListener('change', function (e) { switchUser(e.target.value); });
-      $('addUserBtn').addEventListener('click', addUser);
-      $('renameUserBtn').addEventListener('click', renameUser);
-      $('delUserBtn').addEventListener('click', deleteUser);
-      $('sessionsToggle').addEventListener('click', function () {
-        var open = $('tbl').style.display !== 'none';
-        $('tbl').style.display = open ? 'none' : '';
-        $('caret').className = open ? 'closed' : '';
+            persist();
+            renderTable();
+          }
+        }
       });
 
-      function applyTheme(mode) {
-        document.documentElement.setAttribute('data-theme', mode);
-        $('themeBtn').textContent = mode === 'dark' ? 'Light mode' : 'Dark mode';
+      // Dark Mode toggle
+      var themeBtn = document.getElementById('themeBtn');
+      if (themeBtn) {
+        themeBtn.addEventListener('click', function () {
+          var current = document.documentElement.getAttribute('data-theme');
+          var target = current === 'dark' ? 'light' : 'dark';
+          document.documentElement.setAttribute('data-theme', target);
+          themeBtn.textContent = target === 'dark' ? 'Light mode' : 'Dark mode';
+        });
       }
-      $('themeBtn').addEventListener('click', function () {
-        applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
-      });
-      applyTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 
-      load();
-      setInterval(render, 100);
+      // Collapsible sessions table
+      document.getElementById('sessionsToggle').addEventListener('click', function () {
+        var caret = document.getElementById('caret');
+        var tbl = document.getElementById('tbl');
+        var isClosed = caret.classList.toggle('closed');
+        tbl.style.display = isClosed ? 'none' : '';
+      });
+
+      // Initial Load
+      apply(DATA);
+      loadLocal();
       render();
       renderTable();
+
     })();
   </script>
 </body>
-
 </html>
