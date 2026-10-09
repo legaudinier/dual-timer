@@ -261,9 +261,10 @@
       <span id="sessionInfo" class="muted">not started</span>
     </div>
     <button id="saveBtn">Save Session</button>
-    <button id="resetBtn">Reset Current</button>
     <!-- <button id="exportBtn">Export JSON</button> -->
     <button id="exportCsvBtn">Export CSV</button>
+    <button id="resetBtn">Reset Current</button>
+
   </div>
 
   <h2 id="sessionsToggle" class="collapser">
@@ -550,7 +551,19 @@
         currentUser.sessions.unshift(newSession);
         persist();
         renderTable();
-        resetCurrentSession();
+        if (timerState.timerInterval) {
+          clearInterval(timerState.timerInterval);
+          timerState.timerInterval = null;
+        }
+        timerState.activeTimer = null;
+        timerState.sessionStartTime = null;
+        timerState.leftMs = 0;
+        timerState.rightMs = 0;
+        timerState.lastTick = null;
+        leftBox.classList.remove('active');
+        rightBox.classList.remove('active');
+        updateClockDisplays();
+        sessionInfo.textContent = 'not started';
       });
 
       /* ============================================================
